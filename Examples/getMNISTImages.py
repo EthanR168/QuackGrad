@@ -2,7 +2,7 @@ import numpy as np
 from torchvision import datasets, transforms
 
 # Define a transform to normalize the data
-transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+transform = transforms.Compose([transforms.ToTensor()])
 
 # Load MNIST data
 trainset = datasets.MNIST(root='Examples/MNISTData', train=True, download=True, transform=transform)
