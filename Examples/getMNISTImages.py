@@ -10,7 +10,7 @@ testset = datasets.MNIST(root='Examples/MNISTData', train=False, download=True, 
 
 # Preprocess and save the data as arrays
 train_images = trainset.data.view(-1, 28*28).numpy().astype('float16') / 255.0  # Normalize pixel values to [0,1]
-train_labels = np.eye(10, dtype='float16')[trainset.targets.numpy()]          # One-hot encode labels
+train_labels = np.eye(10, dtype='float16')[trainset.targets.numpy()]            # One-hot encode labels
 
 test_images = testset.data.view(-1, 28*28).numpy().astype('float16') / 255.0
 test_labels = np.eye(10, dtype='float16')[testset.targets.numpy()]

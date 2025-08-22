@@ -43,7 +43,7 @@ Note:
 import numpy as np
 
 class Tensor:
-    def __init__(self, data, requiresGrad=True, childTensors=[], operator=""):
+    def __init__(self, data, requiresGrad=True, childTensors=None, operator=""):
         self.data = np.array(data)
         self.grad = np.zeros_like(self.data)
         self.childTensors = childTensors
@@ -63,7 +63,8 @@ class Tensor:
     
     @staticmethod
     def zeros(shape, requiresGrad=True):
-        data = np.zeros(*shape).astype(np.float32)
+        data = np.zeros(shape).astype(np.float32)
+
         return Tensor(data, requiresGrad=requiresGrad)
     
     def zeroGrad(self):
@@ -79,7 +80,8 @@ class Tensor:
 
     def __mul__(self, other):
         other = self._ensureTensor(other)
-        out = Tensor(self.data * other.data, self.requiresGrad, [self, other], "*")
+        req = self.requiresGrad or other.requiresGrad
+        out = Tensor(self.data * other.data, req, childTensors=[self, other], operator="*")
         def backProp_mul(self, grad):
             self.childTensors[0].grad += grad * self.childTensors[1].data
             self.childTensors[1].grad += grad * self.childTensors[0].data
@@ -92,7 +94,8 @@ class Tensor:
 
     def __truediv__(self, other):
         other = self._ensureTensor(other)
-        out = Tensor(self.data / other.data, self.requiresGrad, [self, other], "/")
+        req = self.requiresGrad or other.requiresGrad
+        out = Tensor(self.data / other.data, req, childTensors=[self, other], operator="/")
         def backProp_truediv(self, grad):
             x, y = self.childTensors
             x.grad += grad * (1 / y.data)
@@ -106,7 +109,8 @@ class Tensor:
 
     def __add__(self, other):
         other = self._ensureTensor(other)
-        out = Tensor(self.data + other.data, self.requiresGrad, [self, other], "+")
+        req = self.requiresGrad or other.requiresGrad
+        out = Tensor(self.data + other.data, req, childTensors=[self, other], operator="+")
         def backProp_add(self, grad):
             self.childTensors[0].grad += grad 
             self.childTensors[1].grad += grad
@@ -119,7 +123,8 @@ class Tensor:
 
     def __sub__(self, other):
         other = self._ensureTensor(other)
-        out = Tensor(self.data - other.data, self.requiresGrad, [self, other], "-")
+        req = self.requiresGrad or other.requiresGrad
+        out = Tensor(self.data - other.data, req, childTensors=[self, other], operator="-")
         def backProp_sub(self, grad):
             self.childTensors[0].grad += grad 
             self.childTensors[1].grad -= grad
@@ -132,7 +137,8 @@ class Tensor:
 
     def __floordiv__(self, other):
         other = self._ensureTensor(other)
-        out = Tensor(self.data // other.data, self.requiresGrad, [self, other], "//")
+        req = self.requiresGrad or other.requiresGrad
+        out = Tensor(self.data // other.data, req, childTensors=[self, other], operator="//")
         def backProp_floordiv(self, grad):
             raise NotImplementedError()
         out._backProp = backProp_floordiv
@@ -144,7 +150,8 @@ class Tensor:
 
     def __pow__(self, other): # power: x ** 2
         other = self._ensureTensor(other)
-        out = Tensor(self.data ** other.data, self.requiresGrad, [self, other], "**")
+        req = self.requiresGrad or other.requiresGrad
+        out = Tensor(self.data ** other.data, req, childTensors=[self, other], operator="**")
         def backProp_pow(self, grad):
             x, y = self.childTensors
             x.grad += grad * (y.data * (x.data ** (y.data - 1)))
@@ -158,7 +165,8 @@ class Tensor:
 
     def __mod__(self, other): # x % 2
         other = self._ensureTensor(other)
-        out = Tensor(self.data % other.data, self.requiresGrad, [self, other], "%")
+        req = self.requiresGrad or other.requiresGrad
+        out = Tensor(self.data % other.data, req, childTensors=[self, other], operator="%")
         def backProp_mod(self, grad):
             raise NotImplementedError()
         out._backProp = backProp_mod
@@ -170,6 +178,7 @@ class Tensor:
     
     def __matmul__(self, other): # a @ b
         other = self._ensureTensor(other)
+        req = self.requiresGrad or other.requiresGrad
 
         def backProp_matmul(self, grad):
             x, y = self.childTensors
@@ -180,9 +189,9 @@ class Tensor:
                 y.grad += x.data.T @ grad
 
         if(self.data.ndim == 0 or other.data.ndim == 0): 
-            out = Tensor(self.data * other.data, self.requiresGrad, [self, other], "@")
+            out = Tensor(self.data * other.data, req, childTensors=[self, other], operator="@")
         else:
-            out = Tensor(self.data @ other.data, self.requiresGrad, [self, other], "@")
+            out = Tensor(self.data @ other.data, req, childTensors=[self, other], operator="@")
         out._backProp = backProp_matmul
         return out
 
@@ -192,23 +201,24 @@ class Tensor:
 
     def ReLU(self):
         data = np.maximum(0, self.data)
-        out = Tensor(data, self.requiresGrad, [self], "relu")
-        def backProp_relu(self, _):
-            grad = out.grad
-            reluGrad = grad * (self.data > 0)
-            self.grad += reluGrad
+        out = Tensor(data, self.requiresGrad, childTensors=[self], operator="relu")
+
+        def backProp_relu(self, grad):
+            reluGrad = grad * (self.childTensors[0].data > 0)
+            self.childTensors[0].grad += reluGrad
+
         out._backProp = backProp_relu
         return out
     
-    def softmax(self):
-        exps = np.exp(self.data - np.max(self.data, axis=-1, keepdims=True))
-        sumExps = exps.sum(axis=0, keepdims=True)
+    def softmax(self, axis=-1):
+        exps = np.exp(self.data - np.max(self.data, axis=axis, keepdims=True))
+        sumExps = exps.sum(axis=axis, keepdims=True)
         softmax_out = exps / sumExps
-        out = Tensor(softmax_out, self.requiresGrad, [self], "softmax")
+        out = Tensor(softmax_out, self.requiresGrad, childTensors=[self], operator="softmax")
         
         def backProp_softmax(self, grad):
             y = softmax_out 
-            dot = np.sum(grad * y, axis=0, keepdims=True) 
+            dot = np.sum(grad * y, axis=axis, keepdims=True) 
             grad_input = y * (grad - dot)
             self.childTensors[0].grad += grad_input
         
@@ -217,7 +227,7 @@ class Tensor:
     
     def exp(self):
         data = np.exp(self.data)
-        out = Tensor(data, self.requiresGrad, [self], "exp")
+        out = Tensor(data, self.requiresGrad, childTensors=[self], operator="exp")
 
         def backProp_exp(self, grad):
             self.childTensors[0].grad += grad * self.data
@@ -226,7 +236,7 @@ class Tensor:
     
     def max(self, axis=None, keepdims=False):
         data = self.data.max(axis=axis, keepdims=keepdims)
-        out = Tensor(data, self.requiresGrad, [self], "max")
+        out = Tensor(data, self.requiresGrad, childTensors=[self], operator="max")
 
         def backProp_max(self, grad):
             grad_input = np.zeros_like(self.childTensors[0].data)
@@ -234,8 +244,9 @@ class Tensor:
                 mask = (self.childTensors[0].data == self.data)
                 grad_input[mask] = grad
             else:
-                expanded_out = np.expand_dims(self.data, axis=axis)
-                mask = (self.childTensors[0].data == expanded_out)
+                if not keepdims:
+                    grad = np.expand_dims(grad, axis=axis)
+                mask = (self.childTensors[0].data == np.expand_dims(self.data, axis=axis))
                 grad_input += grad * mask
             self.childTensors[0].grad += grad_input
         out._backProp = backProp_max
@@ -243,7 +254,7 @@ class Tensor:
     
     def sum(self, axis=None, keepdims=False):
         data = self.data.sum(axis=axis, keepdims=keepdims)
-        out = Tensor(data, self.requiresGrad, [self], "sum")
+        out = Tensor(data, self.requiresGrad, childTensors=[self], operator="sum")
 
         def backProp_sum(self, grad):
             grad_input = grad
@@ -256,7 +267,7 @@ class Tensor:
 
     def log(self):
         data = np.log(self.data)
-        out = Tensor(data, self.requiresGrad, [self], "log")
+        out = Tensor(data, self.requiresGrad, childTensors=[self], operator="log")
 
         def backProp_log(self, grad):
             self.childTensors[0].grad += grad / self.childTensors[0].data
@@ -266,22 +277,27 @@ class Tensor:
     
     def mean(self, axis=None, keepdims=False):
         data = self.data.mean(axis=axis, keepdims=keepdims)
-        out = Tensor(data, self.requiresGrad, [self], "mean")
+        out = Tensor(data, self.requiresGrad, childTensors=[self], operator="mean")
 
         def backProp_mean(self, grad):
-            grad_input = grad
-            if axis is not None and not keepdims:
-                grad_input = np.expand_dims(grad, axis=axis)
-            grad_input = np.ones_like(self.childTensors[0].data) * grad_input
-            grad_input /= self.childTensors[0].data.size / (self.data.size if axis is not None else 1)
-            self.childTensors[0].grad += grad_input
+            gradInput = grad
+            x = self.childTensors[0].data
+            if axis is None:
+                N = x.size
+                gradInput = np.ones_like(x) * (grad / N)
+            else:
+                if not keepdims:
+                    gradInput = np.expand_dims(grad, axis=axis)
+                N = x.shape[axis]
+                gradInput = np.ones_like(x) * (grad / N)
+            self.childTensors[0].grad += gradInput
 
         out._backProp = backProp_mean
         return out
 
     def reshape(self, *shape):
         data = self.data.reshape(*shape)
-        out = Tensor(data, self.requiresGrad, [self], "reshape")
+        out = Tensor(data, self.requiresGrad, childTensors=[self], operator="reshape")
 
         def backProp_reshape(self, grad):
             self.childTensors[0].grad += grad.reshape(self.childTensors[0].data.shape)
@@ -292,7 +308,7 @@ class Tensor:
     @property
     def T(self):
         data = self.data.T
-        out = Tensor(data, self.requiresGrad, [self], "transpose")
+        out = Tensor(data, self.requiresGrad, childTensors=[self], operator="transpose")
 
         def backProp_T(self, grad):
             self.childTensors[0].grad += grad.T
@@ -301,7 +317,7 @@ class Tensor:
         return out
 
     def __neg__(self):
-        out = Tensor(-self.data, self.requiresGrad, [self], "neg")
+        out = Tensor(-self.data, self.requiresGrad, childTensors=[self], operator="neg")
 
         def backProp_neg(self, grad):
             self.childTensors[0].grad -= grad
@@ -318,8 +334,9 @@ class Tensor:
         def build(v):
             if v not in visited:
                 visited.add(v)
-                for child in v.childTensors:
-                    build(child)
+                if(v.childTensors is not None):
+                    for child in v.childTensors:
+                        build(child)
                 tree.append(v)
         build(self)
         

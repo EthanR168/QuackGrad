@@ -40,7 +40,6 @@ for epoch in range(10):
     numCorrect = 0
     allLoses = 0
     allProbabilities = []
-
     for i in range(len(images)):
         # forward pass
         x = Tensor(images[i])
@@ -52,7 +51,7 @@ for epoch in range(10):
 
         out = h2 @ weights[2] + biases[2]
         probabilities = out.softmax()
-        allProbabilities.append(probabilities)
+        allProbabilities.append(probabilities.data)
 
         # backward propagation
         outputGradient = probabilities.data - labels[i]
@@ -60,12 +59,12 @@ for epoch in range(10):
 
         probabilities.backwardPropagation(outputGradient)
 
-        for i in range(len(weights)):
-            weights[i].data -= learningRate * weights[i].grad
-            weights[i].zeroGrad()
-        for i in range(len(biases)):
-            biases[i].data -= learningRate * biases[i].grad
-            biases[i].zeroGrad()
+        for x in range(len(weights)):
+            weights[x].data -= learningRate * weights[x].grad
+            weights[x].zeroGrad()
+        for y in range(len(biases)):
+            biases[y].data -= learningRate * biases[y].grad
+            biases[y].zeroGrad()
 
     print(f"Epoch {epoch + 1} finished")
     print(f"took: {round(time.time() - start, 4)}s")
