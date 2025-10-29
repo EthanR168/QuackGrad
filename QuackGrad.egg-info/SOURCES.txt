@@ -1,0 +1,12 @@
+setup.py
+QuackGrad/TensorClass.py
+QuackGrad/__init__.py
+QuackGrad.egg-info/PKG-INFO
+QuackGrad.egg-info/SOURCES.txt
+QuackGrad.egg-info/dependency_links.txt
+QuackGrad.egg-info/requires.txt
+QuackGrad.egg-info/top_level.txt
+QuackGrad/Ops/__init__.py
+QuackGrad/Ops/basic.py
+QuackGrad/Ops/matrix.py
+QuackGrad/Ops/statistics.py

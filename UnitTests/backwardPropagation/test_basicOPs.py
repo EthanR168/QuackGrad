@@ -39,3 +39,10 @@ def test_exp_backprop():
     y.backwardPropagation(np.ones_like(y.data))  
     expected_grad = np.exp(x.data)  
     assert np.allclose(x.grad, expected_grad)
+
+def test_pow_backprop():
+    x = Tensor(np.array([0.0, 1.0, 2.0]), requiresGrad=True)
+    y = x ** 2        
+    y.backwardPropagation(np.ones_like(y.data))  
+    expected_grad = 2.0 * x.data
+    assert np.allclose(x.grad, expected_grad)
